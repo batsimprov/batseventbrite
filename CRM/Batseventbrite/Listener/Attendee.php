@@ -37,9 +37,9 @@ class CRM_Batseventbrite_Listener_Attendee {
 
     $ticketClassId = $processor->attendee['ticket_class_id'];
     $path = "events/{$processor->attendee['event_id']}/ticket_classes/$ticketClassId";
-    $ticketClass = $eb->request($path);
+    $processor->ticketClass = $eb->request($path);
 
-    $processor->ticketPrice = $ticketClass['cost']['major_value'];
+    $processor->ticketPrice = $processor->ticketClass['cost']['major_value'];
     $paidPrice = $processor->attendee['costs']['gross']['major_value'];
     $processor->valueUsed = $processor->ticketPrice - $paidPrice;
 
@@ -48,12 +48,8 @@ class CRM_Batseventbrite_Listener_Attendee {
       $processor->isCreditVoucher = true;
       $discountDescription .= " ({$promoCode['amount_off']['display']})";
       $amountOff = $promoCode['amount_off']['major_value'];
-      // update participant fee level to full value of ticket class
-      $processor->participantParams['participant_fee_level'] = $ticketClass['cost']['display'];
-      $processor->participantParams['participant_fee_amount'] = $ticketClass['cost']['major_value'];
       $percentOff = NULL;
     } else if (array_key_exists('amount_off', $promoCode)) {
-      // processor shouldn't happen but it does
       $processor->isCreditVoucher = false;
       $discountDescription .= " ({$promoCode['amount_off']['display']})";
       $amountOff = $promoCode['amount_off']['major_value'];
@@ -141,17 +137,23 @@ class CRM_Batseventbrite_Listener_Attendee {
   public function handleTicketTypeRoleAssigned($symfonyEvent) {
     \CRM_Core_Error::debug_log_message("in handleProcessCurrentAttendeeFees");
     $processor = $symfonyEvent->getSubject();
+    // student role always for EB events
     $processor->currentRoleId = STUDENT_ROLE;
   }
 
   public function handleAttendeeProfileAssigned($symfonyEvent) {
     \CRM_Core_Error::debug_log_message("in handleAttendeeProfileAssigned");
     $processor = $symfonyEvent->getSubject();
+    // don't store addresses we don't need them
     unset($processor->attendeeProfile['address']);
   }
 
   public function handleParticipantParamsAssigned($symfonyEvent) {
     \CRM_Core_Error::debug_log_message("in handleParticipantParamsAssigned");
     $processor = $symfonyEvent->getSubject();
+    if ($processor->isCreditVoucher) {
+      $processor->participantParams['participant_fee_level'] = $processor->ticketClass['cost']['display'];
+      $processor->participantParams['participant_fee_amount'] = $processor->ticketClass['cost']['major_value'];
+    }
   }
 }
